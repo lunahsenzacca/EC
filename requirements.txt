@@ -1,0 +1,15 @@
+name: pynl
+channels:
+  - conda-forge
+dependencies:
+  - ipykernel
+  - ipympl
+  - jpype1
+  - matplotlib
+  - numpy
+  - pandas
+  - scipy
+  - pip:
+    - pynetlogo==0.5.2
+
+prefix: "/home/daniele/.local/share/mamba/envs/pynl"

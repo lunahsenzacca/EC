@@ -1,0 +1,14 @@
+name: pynl
+channels:
+  - conda-forge
+dependencies:
+  - ipykernel
+  - ipympl
+  - jpype1
+  - matplotlib
+  - networkx
+  - numpy
+  - pandas
+  - scipy
+  - pip:
+    - pynetlogo==0.5.2
