@@ -1,0 +1,9 @@
+{
+  "N": 1000,
+  "beta": 0.8,
+  "mutrue": 0.0,
+  "vartrue": 1.0,
+  "update-type": 1,
+  "var-c": 0.25,
+  "var-d": 2
+}
