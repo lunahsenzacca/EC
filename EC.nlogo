@@ -25,12 +25,13 @@ globals [ ;; variabili globali
 
 to setup
   ;pulizia e impostazioni grafiche
-  ;; clear-all
+  ;; clear-all ;; clear all pulisce anche le variabili globali
   set-default-shape nodes "circle"
   ask patches [ set pcolor gray ]
 
   create-nodes N
   ask nodes [init-node]
+  ask nodes [ set label who]  ;; cambia label in soli interi per salvare poi meglio la rete
   create-network       ; crea link tra i nodi
 
   set iter 0 ;inizializza conteggio iterazioni
