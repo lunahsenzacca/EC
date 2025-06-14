@@ -135,6 +135,7 @@ end
 to update1
   ask nodes [
   if any? link-neighbors [
+    ; faccio update di tutti i mu-sigma usando mu0-sigma0, che sono quelli a tempo precedente, poi li salvo dopo
     let muneighs [mu0] of link-neighbors
     let tot-conc 0
     let num-conc 0
@@ -152,7 +153,6 @@ to update1
         set num-disc (num-disc + 1)
     ]
 
-    ; faccio update di tutti i mu-sigma usando mu0-sigma0, che sono quelli a tempo precedente, poi li salvo dopo
     ;; update sigma
     set var 1 / (1 / var0 + num-conc / var-c + num-disc / var-d)
     set mu (var * (mu0 / var0 + tot-conc / var-c + tot-disc / var-d) )
