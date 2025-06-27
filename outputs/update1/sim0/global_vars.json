@@ -1,9 +1,11 @@
 {
   "N": 1000,
-  "beta": 0.8,
+  "beta": 1.0,
   "mutrue": 0.0,
   "vartrue": 1.0,
-  "update-type": 1,
-  "var-c": 0.25,
-  "var-d": 2
+  "update-type": 2,
+  "var-c": 0.8,
+  "var-d": 2,
+  "network-type": "\"scale-free\"",
+  "p": 0.01
 }

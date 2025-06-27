@@ -23,8 +23,8 @@ globals [ ;; variabili globali
   iter ;; conteggio iterazioni
 
   ;update-type ;; regola di update da usare
-  network-type;; tipo di rete, scale-free o random
-  var-c
+  ;network-type;; tipo di rete, scale-free o random
+  ;var-c
   var-d
   p
   ;k ;; numero di punti da estrarre per inizializzare medie e varianze nodi
@@ -59,7 +59,10 @@ to init-network
     nw:generate-random nodes edges N p
   ]
   if network-type = "scale-free" [
-    nw:generate-preferential-attachment nodes edges N 1
+    nw:generate-preferential-attachment nodes edges N 2
+  ]
+  ask edges[
+    set tc 1
   ]
 end
 
@@ -80,24 +83,28 @@ end
 ;; ---------------------
 
 to update-belief
-  ifelse update-type = 0 [
+  (ifelse
+  update-type = 0 [
     ask nodes [update0]
     stop
-  ] [
-    ifelse update-type = 1 [
-      update1
-      stop
-    ] [
-      user-message (word "Unknown update-type: " update-type)
-    ]
   ]
+  update-type = 1 [
+     update1
+     stop
+  ]
+  update-type = 2 [
+      update2
+      stop
+  ] [
+      user-message (word "Unknown update-type: " update-type)
+    ])
 end
 
 
 to update0
   ;; sceglie un solo vicino (a caso), poi fa update solo se compatibile
-  if any? link-neighbors [
-    let random-neighbor one-of link-neighbors
+  if any? edge-neighbors [
+    let random-neighbor one-of edge-neighbors
     if (abs(mu - [mu] of random-neighbor) > (beta * sqrt(var)) ) [
       stop
     ]
@@ -115,9 +122,9 @@ end
 
 to update1
   ask nodes [
-  if any? link-neighbors [
+  if any? edge-neighbors [
     ; faccio update di tutti i mu-sigma usando mu0-sigma0, che sono quelli a tempo precedente, poi li salvo dopo
-    let muneighs [mu0] of link-neighbors
+    let muneighs [mu0] of edge-neighbors
     let tot-conc 0
     let num-conc 0
     let tot-disc 0
@@ -151,13 +158,46 @@ end
 to update2
   ask nodes [
     let mucheck mu0
-    let sigmacheck sigma0
-    let nodenum
-    ask out-edges-neighbors [
-      if ( (mu0 - mucheck) > beta * sigmacheck ) [
-        ask link *me* *te* [set tc 1]
+    let sigmacheck sqrt(var0)
+    let kedge-c 0 ;; link che dovranno essere ricreati
+
+    let tot 0  ;; totale medie con cui fare update
+    let num 0  ;; totale numero di medie con cui fare update
+
+    ask my-out-edges [ ;;controlla se link devono essere ricreati; se sì, butta via e tiene da parte il loro numero
+      if ( ([mu0] of other-end - mucheck) > (beta * sigmacheck) ) [
+        set kedge-c (kedge-c + 1)
+        die
       ]
     ]
+
+    repeat kedge-c [ ;; ricrea lo stesso numero di link che ha cancellato
+      create-edge-to one-of nodes with [self != myself] [ set tc 1 ]
+    ]
+
+
+    ask (my-out-edges with [tc = 1]) [ ;; se sono nuovi link e sono concordi, usali per update
+      ask other-end [
+        if ( (mu0 - mucheck) < (beta * sigmacheck) ) [
+          set tot (tot + mu0)
+          set num (num + 1)
+        ]
+      ]
+      set tc 0
+    ]
+
+    ;; effettua update in var e mu
+    set var 1 / (1 / var0 + num / var-c)
+    set mu (var * (mu0 / var0 + tot / var-c ) )
+    set var (var * (num + 1))
+    set color scale-color red mu -2 2
+
+  ]
+
+   ask nodes [
+    set var0 var
+    set mu0 mu
+  ]
     ;; controlla che link tk non debbano diventare tc
 
     ;; rewire di tutti i tc; non con se stessi, controllare non con già collegati
@@ -165,10 +205,7 @@ to update2
     ;; faccio update con to-update
     ;; sposto to-update in tk
 
-  ]
 end
-
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 279
@@ -259,7 +296,7 @@ INPUTBOX
 191
 332
 beta
-0.8
+1.0
 1
 0
 Number
@@ -337,7 +374,7 @@ INPUTBOX
 208
 777
 update-type
-1.0
+2.0
 1
 0
 Number
@@ -349,6 +386,27 @@ INPUTBOX
 615
 k
 5.0
+1
+0
+Number
+
+CHOOSER
+306
+649
+444
+694
+network-type
+network-type
+"random" "scale-free"
+1
+
+INPUTBOX
+497
+554
+658
+614
+var-c
+0.8
 1
 0
 Number
