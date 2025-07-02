@@ -20,6 +20,7 @@ globals [ ;; variabili globali
   ;beta ;; parametro pruning
   ;mutrue  ;; media distribuzione credenze
   ;vartrue   ;; varianza distribuzione credenze
+  pref
   iter ;; conteggio iterazioni
 
   ;update-type ;; regola di update da usare
@@ -165,46 +166,61 @@ to update2
     let num 0  ;; totale numero di medie con cui fare update
 
     ask my-out-edges [ ;;controlla se link devono essere ricreati; se sì, butta via e tiene da parte il loro numero
-      if ( ([mu0] of other-end - mucheck) > (beta * sigmacheck) ) [
+      if ( abs([mu0] of other-end - mucheck) > (beta * sigmacheck) ) [
         set kedge-c (kedge-c + 1)
-        die
+        die ;; magari segnare questi per non ricollegarcisi subito
       ]
     ]
 
-    repeat kedge-c [ ;; ricrea lo stesso numero di link che ha cancellato
-      create-edge-to one-of nodes with [self != myself] [ set tc 1 ]
-    ]
 
+    if remainder iter 10 = 0 [
+        ask my-out-edges [
+          set tc 1
+        ]
+      ]
 
     ask (my-out-edges with [tc = 1]) [ ;; se sono nuovi link e sono concordi, usali per update
       ask other-end [
-        if ( (mu0 - mucheck) < (beta * sigmacheck) ) [
-          set tot (tot + mu0)
-          set num (num + 1)
-        ]
+        ;if ( abs(mu0 - mucheck) < (beta * sigmacheck) ) [
+        set tot (tot + mu0)
+        set num (num + 1)
+        ;]
       ]
       set tc 0
+    ]
+
+    repeat kedge-c [ ;; ricrea lo stesso numero di link che ha cancellato
+      (ifelse
+       pref = 0 [
+          create-edge-to one-of nodes with [self != myself] [ set tc 1 ]
+      ] [
+        let i 0
+          while [i <= 10] [
+          if (i = 10) [
+            create-edge-to one-of nodes with [self != myself and (in-edge-from myself = nobody)] [ set tc 1 ]
+            set i 11
+            ]
+          let newnode one-of nodes with [(self != myself) and (in-edge-from myself = nobody)]
+          if  (abs([mu0] of newnode - mucheck) < (beta * sigmacheck) ) [
+            create-edge-to newnode [set tc 1]
+            set i 11
+          ]
+          set i (i + 1)
+        ]
+      ])
     ]
 
     ;; effettua update in var e mu
     set var 1 / (1 / var0 + num / var-c)
     set mu (var * (mu0 / var0 + tot / var-c ) )
-    set var (var * (num + 1))
+    ;set var (var * (num + 1))
     set color scale-color red mu -2 2
-
   ]
 
    ask nodes [
     set var0 var
     set mu0 mu
   ]
-    ;; controlla che link tk non debbano diventare tc
-
-    ;; rewire di tutti i tc; non con se stessi, controllare non con già collegati
-    ;; trova insieme to-update dei tc con cui fare update
-    ;; faccio update con to-update
-    ;; sposto to-update in tk
-
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -406,7 +422,7 @@ INPUTBOX
 658
 614
 var-c
-0.8
+10.0
 1
 0
 Number
