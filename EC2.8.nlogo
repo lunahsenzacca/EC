@@ -13,6 +13,7 @@ nodes-own [ ;; variabili di ciascun nodo
   var0 ;varianza iniziale
   mu     ;media di cui si fa update
   var  ;varianza di cui si fa update
+  banned?  ;booleana che usiamo solo in update2 per etichettare i nodi i cui link sono stati cancellati perchè non accettabili
 ]
 
 globals [ ;; variabili globali
@@ -20,7 +21,7 @@ globals [ ;; variabili globali
   ;beta ;; parametro pruning
   ;mutrue  ;; media distribuzione credenze
   ;vartrue   ;; varianza distribuzione credenze
-  pref
+  pref                                            ;; LEI è nuova
   iter ;; conteggio iterazioni
 
   ;update-type ;; regola di update da usare
@@ -29,6 +30,8 @@ globals [ ;; variabili globali
   var-d
   p
   ;k ;; numero di punti da estrarre per inizializzare medie e varianze nodi
+  lonely ;; counter per debuggure quante volte non ci sono nodi con cui creare un link che siano simpatici
+  rewired ;; counter dei link totali riallacciati
 ]
 
 
@@ -157,7 +160,13 @@ end
 
 
 to update2
+  set lonely 0
+  set rewired 0
   ask nodes [
+    ask nodes[
+      set banned? false ;; questo forse è stupido e poteva essere fatto alla fine di update2, volevo solo essere sicuro che settasse false su tutti i nodi e non solo sul corrente perchè sarebbe inutile
+    ]
+
     let mucheck mu0
     let sigmacheck sqrt(var0)
     let kedge-c 0 ;; link che dovranno essere ricreati
@@ -168,14 +177,17 @@ to update2
     ask my-out-edges [ ;;controlla se link devono essere ricreati; se sì, butta via e tiene da parte il loro numero
       if ( abs([mu0] of other-end - mucheck) > (beta * sigmacheck) ) [
         set kedge-c (kedge-c + 1)
-        die ;; magari segnare questi per non ricollegarcisi subito
+        ask other-end [
+          set banned? true ;; segna nodo per non ricreare immediatamente un nuovo link
+        ]
+        die
       ]
     ]
 
 
-    if remainder iter 10 = 0 [
+    if remainder iter 10 = 0 [       ;; iter=0 all'inizio, ad ogni GO iter=iter+1;  iter 10 =0 means se resto di iter/10 = 0 allora fai..
         ask my-out-edges [
-          set tc 1
+          set tc 1                   ;; ogni 10 time step mette TUTTI tc = 1
         ]
       ]
 
@@ -189,35 +201,34 @@ to update2
       set tc 0
     ]
 
-    repeat kedge-c [ ;; ricrea lo stesso numero di link che ha cancellato
+    repeat kedge-c [ ;; ricrea lo stesso numero di link che ha cancellato, è contatore come prima
+      set rewired (rewired + 1)
       (ifelse
        pref = 0 [
-          create-edge-to one-of nodes with [self != myself] [ set tc 1 ]
-      ] [
-        let i 0
-          while [i <= 10] [
-          if (i = 10) [
-            create-edge-to one-of nodes with [self != myself and (in-edge-from myself = nobody)] [ set tc 1 ]
-            set i 11
-            ]
-          let newnode one-of nodes with [(self != myself) and (in-edge-from myself = nobody)]
-          if  (abs([mu0] of newnode - mucheck) < (beta * sigmacheck) ) [
-            create-edge-to newnode [set tc 1]
-            set i 11
-          ]
-          set i (i + 1)
-        ]
-      ])
-    ]
+          create-edge-to one-of (nodes with [self != myself]) [set tc 1]   ;; questa è come prima, SOLO CHE é MESSA DOPO IL CHECK sui tc=1
+      ][
+          ;; trova tutti i nodi con mu0 nell'intervallo
+          let linkable-nodes (nodes with [(self != myself) and (in-edge-from myself = nobody) and (abs(mu0 - mucheck) < (beta * sigmacheck)) and (not banned?)] )
+          (ifelse (any? linkable-nodes) [
+                let tolinkto (one-of linkable-nodes)
+                create-edge-to tolinkto [set tc 1]
+           ][
+                let tolinkto (one-of (nodes with [(self != myself) and (in-edge-from myself = nobody) and (not banned?)]))
+                create-edge-to tolinkto [set tc 1]
+                set lonely (lonely + 1) ;contatore per vedere, a questa iterazione, se c'è qualche nodo isolato
+           ])
+      ])                   ;; end di else
+    ]                      ;; end repeat
 
     ;; effettua update in var e mu
+
     set var 1 / (1 / var0 + num / var-c)
     set mu (var * (mu0 / var0 + tot / var-c ) )
     ;set var (var * (num + 1))
     set color scale-color red mu -2 2
   ]
 
-   ask nodes [
+  ask nodes [
     set var0 var
     set mu0 mu
   ]
@@ -426,6 +437,17 @@ var-c
 1
 0
 Number
+
+MONITOR
+486
+676
+573
+721
+NIL
+count edges
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?

@@ -1,6 +1,6 @@
 {
   "N": 1000,
-  "beta": 0.5,
+  "beta": 1.0,
   "mutrue": 0.0,
   "vartrue": 1.0,
   "update-type": 2,
