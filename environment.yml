@@ -11,4 +11,8 @@ dependencies:
   - pandas
   - scipy
   - pip:
+    - mpmath==1.3.0
+    - powerlaw==1.5
     - pynetlogo==0.5.2
+    - tqdm==4.67.1
+
