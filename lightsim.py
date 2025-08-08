@@ -1,111 +1,94 @@
 import pynetlogo
 import numpy as np
-import matplotlib.pyplot as plt
-import json
-
-import os,datetime
-from tqdm import tqdm
+import networkx as nx
+import os
+from itertools import product
 from scipy.special import kl_div
 from scipy.stats import relfreq, norm
 
-# Paths
+from tqdm import tqdm
 
-# Netlogo path
-nl_path = '/home/lunis/Programs/NetLogo-6.4.0-64'
+from multiprocessing import Pool
 
-# Netlogo model
-nl_model = "./EC2.9.nlogo"
+## VARIABLES ##
+# Resolution
+res = 2
+# Pruning parameters
+beta = np.linspace(0.001, 10, res)
+# Separation parameter
+dist = np.linspace(0, 10, res)
+# Set uncertainty on new observations
+varc = 10
+# Get dimensional d
+d_norm = dist[:]/np.sqrt(varc)
+# Set number of agents
+N = 100
+# Set number of iterations (NEW!!!)
+its=100
+# Set number of repeat runs
+rep = 5
+# Where to store values
+sv_pth = './b[' + str(beta[0]) + ',' + str(beta[-1]) + ']d[' + str(dist[0]) + ',' + str(dist[-1]) + ']/'
 
-# Define simulation parameters
-# The numbers here MATTER
+################
 
-# Simulation duration
-T = 100
+# Netlogo installation and model
+NL_PATH = '/opt/netlogo/' if os.environ.get('USER')=='daniele' else '/home/lunis/Programs/NetLogo-6.4.0-64'
+NL_MODEL = "./EC3.0.nlogo"
+NL_GUI=False
 
-# Interval at which to store network configuration
-t_rep = 10
+#Initial distribution parameters
+MUTRUE = 0.
+VARTRUE = 1.
 
-# Define simulation parameters
-# The numbers here DON'T MATTER
-global_vars = {
-    
-    'N': 1000,
-    'beta': 1.,
-    'mutrue': 0.,
-    'vartrue': 1.,
-    'update-type': 2,
-    'var-c': 10.,
-    'var-d': 2,
-    'network-type': "\"scale-free\"",
-    'p': 0.01,
-    'pref': 1,
-    'initial-sampling' : "\"bivariate\"",
-    'dist' : 0.
+# Multiprocessing parameters
+workers = 4#os.cpu_count() - 6
+csize = 6
 
-  }
-
-# Could be useful here
-mutrue = 0.
-vartrue = 1.
-
-# Disable Netlogo gui
-nl_gui = False
 
 # Create iterable single simulation function for multiprocessing
-
-def single_sim(N : int, beta : float, dist : float, var_c : float):
+# takes netlogo as a parameter, so that it doesn't start again at each iteration
+# in multiprocessing, each thread must have a different netlogo instance
+def single_sim_nonl(netlogo, N : int, beta : float, dist : float, var_c : float, iters : int):
+    '''Executes a single simulation.
+    returns kullback-leibler of initial and final mu distros wrt initial distro'''
 
     # Set values for simulation
-
+    global_vars = {
+        'N': N,
+        'beta': beta,
+        'var-c': var_c,
+        'mutrue': MUTRUE,
+        'vartrue': VARTRUE,
+        'update-type': 2,
+        'network-type': "\"scale-free\"",
+        'p': 0.01,
+        'pref': 1,
+        'initial-sampling' : "\"bivariate\"",
+        'dist' : 0.
+    }
     global_vars['N'] = N
     global_vars['beta'] = beta
     global_vars['var-c'] = var_c
     global_vars['dist'] = dist
-    
-    global_vars['mutrue'] = mutrue
-    global_vars['vartrue'] = vartrue
-
-    # Set path where to save numpy arrays (MAYBE NOT NEEDED)
-    outputdir = os.path.join('.','outputs','fisher')
-    os.makedirs(outputdir, exist_ok = True)
-
-    netlogo = pynetlogo.NetLogoLink(
-          gui = nl_gui,
-          netlogo_home = nl_path,
-      )
-
-    netlogo.load_model(nl_model)
-    
 
     # Simple function for retrieving nodes variables
     def values(var: str):
-
         c = netlogo.report(f"map [s -> [{var}] of s] sort nodes")
-
         return c
     
-    
-
     # Prepare NetLogo enviroment
     netlogo.command('clear-all')
 
     for name in global_vars:
-
         netlogo.command(f'set {name} {global_vars[name]}')
 
     netlogo.command('setup')
  
-    iters = T
-
     # Initialize results arrays
     mus = np.empty((0,N))
     sigma2s = mus
-
     nets = []
-
-    # Not used for now
-    lones = mus
-    rewired = mus
 
     mus = np.concatenate((mus, values('mu0')[np.newaxis, :]), axis = 0)
     sigma2s = np.concatenate((sigma2s, values('var0')[np.newaxis, :]), axis = 0)
@@ -114,35 +97,44 @@ def single_sim(N : int, beta : float, dist : float, var_c : float):
 
     # Run the simulation
     for n in range(1,iters+1):
-
         netlogo.command('go')
-        mus = np.concatenate((mus, values('mu')[np.newaxis, :]), axis = 0)
-        sigma2s = np.concatenate((sigma2s, values('var')[np.newaxis, :]), axis = 0)
+        ### save only initial and final mus,sigmas and networks.
+        # mus = np.concatenate((mus, values('mu')[np.newaxis, :]), axis = 0)
+        # sigma2s = np.concatenate((sigma2s, values('var')[np.newaxis, :]), axis = 0)
+        # if (n%t_rep)==0:
+        #     nets.append(netlogo.report("[list ([label] of end1) ([label] of end2)] of edges").astype(int))
+    mus = np.concatenate((mus, values('mu')[np.newaxis, :]), axis = 0)
+    sigma2s = np.concatenate((sigma2s, values('var')[np.newaxis, :]), axis = 0)
+    nets.append(netlogo.report("[list ([label] of end1) ([label] of end2)] of edges").astype(int))
 
-        if (n%t_rep)==0:
-            nets.append(netlogo.report("[list ([label] of end1) ([label] of end2)] of edges").astype(int))
+    #Create final network to calculate connected components
+    G = nx.from_edgelist(nets[-1],create_using=nx.DiGraph)
+    for i in sorted(G.nodes):
+        (G.nodes)[i]['mu'] = mus[-1,i]
+        (G.nodes)[i]['sigma2']= sigma2s[-1,i]
+    #Remove edges to distant nodes
+    toremove = []
+    for edge in G.edges:
+        if abs(G.nodes[edge[0]]['mu']-G.nodes[edge[1]]['mu'])>=beta*np.sqrt(G.nodes[edge[0]]['sigma2']):
+            toremove.append(edge)
+    for edge in toremove:
+        G.remove_edge(*edge)
+    #Calculate dimensions of strongly and weakly connected components
+    scc = sorted([len(i) for i in nx.strongly_connected_components(G)],reverse=True)
+    wcc = sorted([len(i) for i in nx.weakly_connected_components(G)],reverse=True)
 
 
-    #Get data at the start
-    x0 = mus[0,:]
+    #Get KL divergence at start and end
+    dv0 = gauss_DV(mus[0,:], int(N/10))
+    dv = gauss_DV(mus[-1,:], int(N/10))
 
-    # Get data at the end
-    x = mus[iters,:]
-
-    #Get KL divergence
-    dv0 = gauss_DV(x0, int(N/10))
-    dv = gauss_DV(x, int(N/10))
-
-    
-    netlogo.kill_workspace()
-    return dv0, dv
+    return dv0, dv, scc, wcc
 
 # Divergence function conveniently wrapped
-
 def gauss_DV(x, nbins: int):
 
-    blind_mean = x.mean()
-    blind_dev = vartrue # np.sqrt(x.var()) this method creates problems and changes too much per dataset, results are hard to make sense of
+    blind_mean = MUTRUE #x.mean()
+    blind_dev = VARTRUE # np.sqrt(x.var()) this method creates problems and changes too much per dataset, results are hard to make sense of
 
     # Get relative frequencies of the data
 
@@ -159,3 +151,78 @@ def gauss_DV(x, nbins: int):
     dv = kl_div(x_freq, y_freq).sum()
 
     return dv
+
+# Create iterable function
+def it_single_sim(bd : tuple):
+    b, d = bd
+
+    dv0 = np.empty((0))
+    dv = np.empty((0))
+    scc = []
+    wcc= []
+
+    for i in range(0,rep):#,desc='subiter:',leave=False):
+        #'netlogo' gets initialized in init_worker 
+        d0_, d_, scc_, wcc_  = single_sim_nonl(netlogo,N = N, beta = b, dist = d, var_c = varc, iters=its)
+
+        dv0 = np.concatenate((dv0, d0_[np.newaxis]))
+        dv = np.concatenate((dv, d_[np.newaxis]))
+        scc.append(scc_)
+        wcc.append(wcc_)
+    
+    dv0_var = dv0.var()
+    dv0 = dv0.mean()
+
+    dv_var = dv.var()
+    dv = dv.mean()
+    
+    avg_scc_n = np.mean([len(scc_) for scc_ in scc])
+    avg_wcc_n = np.mean([len(wcc_) for wcc_ in wcc])
+
+    return dv0, dv0_var, dv, dv_var, avg_scc_n, avg_wcc_n
+
+def init_worker():
+    '''Initialize process by instantiating a netlogolink.
+    This way, it gets opened only once per process, saving (some) time.'''
+    global netlogo
+    # global here is misleading: since multiprocess spawns completely separate python interpreters,
+    # it means that the process will be able to access it until it's not closed,
+    # not that all processes can see it. So each process gets its own netlogo.
+    
+    netlogo = pynetlogo.NetLogoLink(
+        gui = NL_GUI,
+        netlogo_home = NL_PATH,
+    )
+    netlogo.load_model(NL_MODEL)
+    #print('One netlogo started')
+
+    #stop properly netlogo when the process is terminated
+    def kill_netlogo():
+        if 'netlogo' in globals():
+            netlogo.kill_workspace()
+            #print('killed netlogo!')
+        #else:
+        #    print('no netlogo global found')
+    import atexit
+    atexit.register(kill_netlogo) 
+
+def multiple_sim():
+    bdpairs = list(product(beta,dist)) # list of (b,d) tuples
+    with Pool(workers,initializer=init_worker) as p:
+        ps = list(tqdm(p.imap(it_single_sim, bdpairs),# chunksize = csize),
+                        total=len(bdpairs),
+                        leave=True)
+                    )
+    
+    psarr = np.array(ps)
+    return bdpairs, psarr
+
+
+if __name__ == '__main__':
+    #### EVALUATE THINGS
+    bdpairs,psarr = multiple_sim()
+    # Save results to local
+    os.makedirs(sv_pth, exist_ok = True)
+    print('output shape:', psarr.shape)
+    np.save(sv_pth + str(res) + 'ps.npy', psarr)
+    np.save(sv_pth + str(res) + 'bdpairs.npy', bdpairs)
