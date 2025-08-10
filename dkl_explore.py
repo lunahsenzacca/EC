@@ -1,5 +1,6 @@
 import pynetlogo
 import numpy as np
+import networkx as nx
 import matplotlib.pyplot as plt
 import json
 
@@ -14,7 +15,7 @@ from scipy.stats import relfreq, norm
 nl_path = '/home/lunis/Programs/NetLogo-6.4.0-64'
 
 # Netlogo model
-nl_model = "./EC3.0.nlogo"
+nl_model = "./EC3.1.nlogo"
 
 # Define simulation parameters
 # The numbers here MATTER
@@ -59,10 +60,7 @@ nl_gui = False
 
 # Propose expected standard deviation decay
 
-# Max outdegree of nodes
-friends = 10
-
-def power_law(t, d0: float, dist = float):
+def power_law(t, d0: float, dist: float, friends: int):
 
     d = (d0 + dist)/np.power(t + 1, (3*friends + 1)/2) + (dist/d0)*np.exp(-t/tau) + asint
 
@@ -92,8 +90,33 @@ def gauss_DV(x, d: float, nbins: int):
 
     return dv
 
+# Compute strongly and weakly components for a given net
+def components(net, mus, sigmas, beta):
+
+    G = nx.from_edgelist(net,create_using=nx.DiGraph)
+    
+    for i in sorted(G.nodes):
+        (G.nodes)[i]['mu'] = mus[i]
+        (G.nodes)[i]['sigmas']= sigmas[i]
+    #Remove edges to distant nodes
+    toremove = []
+    for edge in G.edges:
+        if abs(G.nodes[edge[0]]['mu']-G.nodes[edge[1]]['mu'])>=beta*np.sqrt(G.nodes[edge[0]]['sigmas']):
+            toremove.append(edge)
+    for edge in toremove:
+        G.remove_edge(*edge)
+    #Calculate dimensions of strongly and weakly connected components
+    scc = sorted([len(i) for i in nx.strongly_connected_components(G)],reverse=True)
+    wcc = sorted([len(i) for i in nx.weakly_connected_components(G)],reverse=True)
+    
+    a_scc = len(scc)
+    a_wcc = len(wcc)
+    
+    return a_scc, a_wcc
+
+
 # Get agents PDFs and network configuration
-def get_internals(N : int, beta : float, dist : float, var_c : float, T = T, t_rep = t_rep):
+def get_internals(N : int, beta : float, dist : float, var_c : float, T = T):
 
     # Set values for simulation
 
@@ -159,9 +182,7 @@ def get_internals(N : int, beta : float, dist : float, var_c : float, T = T, t_r
         netlogo.command('go')
         mus = np.concatenate((mus, values('mu')[np.newaxis, :]), axis = 0)
         sigma2s = np.concatenate((sigma2s, values('var')[np.newaxis, :]), axis = 0)
-
-        if (n%t_rep)==0:
-            nets.append(netlogo.report("[list ([label] of end1) ([label] of end2)] of edges").astype(int))
+        nets.append(netlogo.report("[list ([label] of end1) ([label] of end2)] of edges").astype(int))
 
     
     netlogo.kill_workspace()
