@@ -22,11 +22,13 @@ varc = 10
 # Set number of agents
 N = 1000
 # Set number of iterations (NEW!!!)
-its=50
+its=60
 # Set number of repeat runs
-rep = 4
+rep = 5
 # Outdegree of nodes for construction (USED BY power_law FOR PREDICTION)
 out_s = int(np.log(N) + 0.5)
+# Bins to use in divergence calculation
+nbins = 10
 # Where to store values
 sv_pth = './b[' + str(beta[0]) + ',' + str(beta[-1]) + ']d[' + str(dist[0]) + ',' + str(dist[-1]) + ']/'
 
@@ -128,19 +130,19 @@ def single_sim_nonl(netlogo, N : int, beta : float, dist : float, var_c : float,
     dt = power_law(iters, d0 = mus[0,:].std(), dist = dist)
 
     #Get KL divergence at start and end
-    dv0 = gauss_DV(mus[0,:], d = d0, nbins = int(N/10))
-    dv = gauss_DV(mus[-1,:], d = dt, nbins = int(N/10))
+    dv0 = gauss_DV(mus[0,:], d = d0)
+    dv = gauss_DV(mus[-1,:], d = dt)
 
     return dv0, dv, scc, wcc
 
-def power_law(t, d0: float, dist = float):
+def power_law(t, d0: float, dist: float, fiends = out_s):
 
     d = (d0 + dist)/np.power(t + 1, (3*out_s + 1)/2) + (dist/d0)*np.exp(-t/10) + 0.5
 
     return d
 
 # Divergence function conveniently wrapped
-def gauss_DV(x, d: float, nbins: int):
+def gauss_DV(x, d: float, nbins = nbins):
 
     # Get relative frequencies of the data
     x_freq, llim, wbin, __ = relfreq(x, numbins = nbins)
