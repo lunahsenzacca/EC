@@ -12,7 +12,7 @@ from multiprocessing import Pool
 
 ## VARIABLES ##
 # Resolution
-res = 15
+res = 40
 # Pruning parameters
 beta = np.linspace(0.001, 10, res)
 # Separation parameter
@@ -20,13 +20,11 @@ dist = np.linspace(0, 10, res)
 # Set uncertainty on new observations
 varc = 10
 # Set number of agents
-N = 1000
+N = 100
 # Set number of iterations (NEW!!!)
-its=60
+its = 60
 # Set number of repeat runs
 rep = 5
-# Outdegree of nodes for construction (USED BY power_law FOR PREDICTION)
-out_s = int(np.log(N) + 0.5)
 # Bins to use in divergence calculation
 nbins = 10
 # Where to store values
@@ -44,7 +42,7 @@ MUTRUE = 0.
 VARTRUE = 1.
 
 # Multiprocessing parameters
-workers = 4#os.cpu_count() - 6
+workers = 5
 csize = 4
 
 
@@ -125,24 +123,31 @@ def single_sim_nonl(netlogo, N : int, beta : float, dist : float, var_c : float,
     scc = sorted([len(i) for i in nx.strongly_connected_components(G)],reverse=True)
     wcc = sorted([len(i) for i in nx.weakly_connected_components(G)],reverse=True)
 
+    #Calculate assortativity wrt the mean
+    ass_mu = nx.numeric_assortativity_coefficient(G,'mu')
+    transitivity = nx.transitivity(G)
+
+    dist = mus[0,:].std()
+    m = mus[0,:].mean()
+
     #Get standard deviation prediction
-    d0 = power_law(0,     d0 = mus[0,:].std(), dist = dist)
-    dt = power_law(iters, d0 = mus[0,:].std(), dist = dist)
+    d0 = power_law(0,     dist = dist)
+    dt = power_law(iters, dist = dist)
 
     #Get KL divergence at start and end
-    dv0 = gauss_DV(mus[0,:], d = d0)
-    dv = gauss_DV(mus[-1,:], d = dt)
+    dv0 = gauss_DV(mus[0,:], m = m, d = d0)
+    dv = gauss_DV(mus[-1,:], m = m, d = dt)
 
-    return dv0, dv, scc, wcc
+    return dv0, dv, scc, wcc, ass_mu, transitivity
 
-def power_law(t, d0: float, dist: float, fiends = out_s):
+def power_law(t: int, dist: float, tau = 10, delta = 0.1):
 
-    d = (d0 + dist)/np.power(t + 1, (3*out_s + 1)/2) + (dist/d0)*np.exp(-t/10) + 0.5
+    d = dist/np.power(t/tau + 1, 3) + dist*np.exp(-t/tau) + dist*delta
 
     return d
 
 # Divergence function conveniently wrapped
-def gauss_DV(x, d: float, nbins = nbins):
+def gauss_DV(x, m: float, d: float, nbins = nbins):
 
     # Get relative frequencies of the data
     x_freq, llim, wbin, __ = relfreq(x, numbins = nbins)
@@ -152,7 +157,7 @@ def gauss_DV(x, d: float, nbins = nbins):
 
     for i in range(0, nbins):
 
-        y_freq = np.concatenate((y_freq, norm.pdf( (llim + wbin/2 + i*wbin), loc = x.mean(), scale = d)[np.newaxis]))
+        y_freq = np.concatenate((y_freq, norm.pdf( (llim + wbin/2 + i*wbin), loc = m, scale = d)[np.newaxis]))
 
     dv = kl_div(x_freq, y_freq).sum()
 
@@ -166,15 +171,19 @@ def it_single_sim(bd : tuple):
     dv = np.empty((0))
     scc = []
     wcc= []
+    ass_mu = []
+    transitivity = []
 
     for i in range(0,rep):#,desc='subiter:',leave=False):
         #'netlogo' gets initialized in init_worker 
-        d0_, d_, scc_, wcc_  = single_sim_nonl(netlogo,N = N, beta = b, dist = d, var_c = varc, iters=its)
+        d0_, d_, scc_, wcc_, ass_mu_, transitivity_  = single_sim_nonl(netlogo,N = N, beta = b, dist = d, var_c = varc, iters=its)
 
         dv0 = np.concatenate((dv0, d0_[np.newaxis]))
         dv = np.concatenate((dv, d_[np.newaxis]))
         scc.append(scc_)
         wcc.append(wcc_)
+        ass_mu.append(ass_mu_)
+        transitivity.append(transitivity_)
     
     dv0_var = dv0.var()
     dv0 = dv0.mean()
@@ -182,10 +191,14 @@ def it_single_sim(bd : tuple):
     dv_var = dv.var()
     dv = dv.mean()
     
+    var_scc_n = np.var([len(scc_) for scc_ in scc])
     avg_scc_n = np.mean([len(scc_) for scc_ in scc])
+
+    var_wcc_n = np.var([len(wcc_) for wcc_ in wcc])
     avg_wcc_n = np.mean([len(wcc_) for wcc_ in wcc])
 
-    return dv0, dv0_var, dv, dv_var, avg_scc_n, avg_wcc_n
+    return (dv0, dv0_var, dv, dv_var, avg_scc_n, var_scc_n, avg_wcc_n, var_wcc_n,
+            np.mean(ass_mu), np.var(ass_mu), np.mean(transitivity), np.var(transitivity))
 
 def init_worker():
     '''Initialize process by instantiating a netlogolink.
