@@ -60,17 +60,15 @@ nl_gui = False
 
 # Propose expected standard deviation decay
 
-def power_law(t, d0: float, dist: float, friends: int):
+def power_law(t: int, dist: float, tau = 10, delta = 0.1):
 
-    d = (d0 + dist)/np.power(t + 1, (3*friends + 1)/2) + (dist/d0)*np.exp(-t/tau) + asint
-
-    #d = (d0/(np.sqrt(vartrue)))*np.exp(-t/T) + (dist/d0)*np.exp(-t/tau)
+    d = dist/np.power(t/tau + 1, 3) + dist*np.exp(-t/tau) + dist*delta
 
     return d
 
 # Divergence function conveniently wrapped
 
-def gauss_DV(x, d: float, nbins: int):
+def gauss_DV(x,m: float, d: float, nbins: int):
 
     # Get relative frequencies of the data
 
@@ -82,9 +80,7 @@ def gauss_DV(x, d: float, nbins: int):
 
     for i in range(0, nbins):
 
-        y_freq.append(norm.pdf( (llim + wbin/2 + i*wbin), loc = x.mean(), scale = d))
-
-    y_freq = np.asarray(y_freq)
+        y_freq.append(norm.pdf( (llim + wbin/2 + i*wbin), loc = m, scale = d))
 
     dv = kl_div(x_freq, y_freq).sum()
 
@@ -274,12 +270,12 @@ def rep_sim(N : int, beta : float, dist : float, var_c : float, reps: int, T = T
         # Get data at the end
         x = mus[1,:]
 
-        d_0 = power_law(0,d0 = x0.std(), dist = dist)
-        d_t = power_law(iters, d0 = x0.std(), dist = dist)
+        d_0 = power_law(0, dist = x0.std())
+        d_t = power_law(iters, dist = x0.std())
 
         # Get KL divergence
-        dv0 = gauss_DV(x0, d = d_0, nbins = int(N/10))
-        dv = gauss_DV(x, d = d_t, nbins =  int(N/10))
+        dv0 = gauss_DV(x0, m = x0.mean(), d = d_0, nbins = int(N/10))
+        dv = gauss_DV(x, m = x0.mean(), d = d_t, nbins =  int(N/10))
 
         # Append to multiple run results
         DV0.append(dv0)

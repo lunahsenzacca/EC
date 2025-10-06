@@ -14,9 +14,9 @@ from multiprocessing import Pool
 # Resolution
 res = 40
 # Pruning parameters
-beta = np.linspace(0.001, 10, res)
+beta = np.linspace(0.001, 5, res)
 # Separation parameter
-dist = np.linspace(0, 10, res)
+dist = np.linspace(0, 5, res)
 # Set uncertainty on new observations
 varc = 10
 # Set number of agents
@@ -42,7 +42,7 @@ MUTRUE = 0.
 VARTRUE = 1.
 
 # Multiprocessing parameters
-workers = 5
+workers = 10
 csize = 4
 
 
@@ -185,6 +185,7 @@ def it_single_sim(bd : tuple):
         ass_mu.append(ass_mu_)
         transitivity.append(transitivity_)
     
+    '''
     dv0_var = dv0.var()
     dv0 = dv0.mean()
 
@@ -196,9 +197,12 @@ def it_single_sim(bd : tuple):
 
     var_wcc_n = np.var([len(wcc_) for wcc_ in wcc])
     avg_wcc_n = np.mean([len(wcc_) for wcc_ in wcc])
+    '''
+    scc_n = np.array([len(scc_) for scc_ in scc])
+    wcc_n = np.array([len(wcc_) for wcc_ in wcc])
 
-    return (dv0, dv0_var, dv, dv_var, avg_scc_n, var_scc_n, avg_wcc_n, var_wcc_n,
-            np.mean(ass_mu), np.var(ass_mu), np.mean(transitivity), np.var(transitivity))
+    return (dv0, dv, scc_n, wcc_n,
+            ass_mu, transitivity)
 
 def init_worker():
     '''Initialize process by instantiating a netlogolink.
