@@ -12,7 +12,7 @@ from multiprocessing import Pool
 
 ## VARIABLES ##
 # Resolution
-res = 40
+res = 20
 # Pruning parameters
 beta = np.linspace(0.001, 5, res)
 # Separation parameter
@@ -20,11 +20,11 @@ dist = np.linspace(0, 5, res)
 # Set uncertainty on new observations
 varc = 10
 # Set number of agents
-N = 100
+N = 1000
 # Set number of iterations (NEW!!!)
 its = 60
 # Set number of repeat runs
-rep = 5
+rep = 20
 # Bins to use in divergence calculation
 nbins = 10
 # Where to store values
