@@ -1,0 +1,31 @@
+[project]
+name = "echo-chambers"
+version = "0.1.0"
+description = "Python scripts and notebooks for agent network analysis. Configured with Barabasi-Albert network and a bayesian like interaction where the formation of echo chambers can be observed."
+authors = [
+    {name = "lunahsenzacca",email = "elle.rutigliano@gmail.com"}
+]
+license = {text = "None"}
+readme = "README.md"
+requires-python = "=3.13.9"
+dependencies = [
+    "pynetlogo (>=0.5.2,<0.6.0)",
+    "networkx (>=3.6.1,<4.0.0)",
+    "numpy (>=2.3.5,<3.0.0)",
+    "pandas (>=2.3.3,<3.0.0)",
+    "scipy (>=1.16.3,<2.0.0)",
+    "matplotlib (>=3.10.7,<4.0.0)",
+    "seaborn (>=0.13.2,<0.14.0)",
+    "tqdm (>=4.67.1,<5.0.0)",
+    "jpype1 (>=1.6.0,<2.0.0)",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel (>=7.1.0,<8.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
