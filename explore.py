@@ -12,7 +12,7 @@ from scipy.stats import relfreq, norm
 # Paths
 
 # Netlogo path
-nl_path = 'PUT YOUR NETLOGO PATH HERE'
+nl_path = './NetLogo'
 
 # Netlogo model
 nl_model = "./EC.nlogo"
